@@ -1,0 +1,38 @@
+calcstat = function(start, irate, mp, escrow, extra, extra_add) {
+  remain = start
+  month = 0
+  ipay_total = 0
+  
+  while (remain > 0) {
+    ipay = remain * irate / 12
+    year = floor(month / 12)
+    extrap = extra + extra_add * year
+    remain = remain + ipay + escrow - mp - extrap
+    month = month + 1
+    ipay_total = ipay_total + ipay * (ipay > 0)
+  }
+  
+  c(round(month/12, 1), round(ipay_total,0))
+  
+}
+
+calcstat(start  = 369007, 
+         irate  = 0.06875, 
+         mp     = 2852.7, 
+         escrow = 382.6, 
+         extra  = 250,
+         extra_add = 0)
+
+groups = c(rep(1, 100), rep(2, 200))
+fes = c(rep(-10, 100), rep(1, 200))
+p = c(rep(100, 100), rep(200, 200))
+X = c(rnorm(100, 0, 1), rnorm(200, 5, 1))
+Xb = c(rep(mean(X[1:100]), 100), rep(mean(X[101:300]), 200))
+Y0 = fes + X + Xb
+Y1 = rnorm(300, 1, 1) + fes + 2*X + 2*Xb + p / 100
+diffs = Y1 - Y0
+est1 = mean(Y1 - Y0)
+est2 = tapply(diffs, groups, mean)
+est2[1] * 1/3 + est2[2] * 2/3
+est1
+est2

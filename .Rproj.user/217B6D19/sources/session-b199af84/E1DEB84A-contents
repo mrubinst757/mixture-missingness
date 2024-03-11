@@ -1,0 +1,189 @@
+setwd("C:\\Users\\mrubinstein\\OneDrive - RAND Corporation\\Documents\\Opioids\\LitReview")
+library(tidyverse)
+
+all = map(list.files("Screening/Assignments/Results",
+               pattern = "csv",
+               full.names = TRUE), read_csv) %>%
+  map(~set_names(.x, tolower(names(.)))) %>%
+  map(~set_names(.x, gsub("ben_rec|include|include\\/exclude", "rec", names(.)))) %>%
+  map(~mutate(.x, rec_num = case_when(
+    grepl("include|1|unsure|[Uu]nclear|Include", as.character(rec)) ~ 1,
+    grepl("Exclude|exclude|0", as.character(rec)) ~ 0
+  ))) %>%
+  map(~filter(.x, !is.na(title)))
+
+all[[4]]$abstracts = NA
+
+final = all %>%
+  map(~select(.x, any_of(c("abstracts", "title", "keywords", "rec", "rec_num")))) %>%
+  map(~filter(.x, rec_num == 1)) %>%
+  invoke(rbind, .)
+
+write_csv(final, "Screening/Final/full-text-review.csv")
+
+#
+all1 = all
+all1[[4]] = all1[[4]] %>%
+  filter(to_review == 1)
+
+table1 = all1 %>%
+  map2(c("ben", "ben", "max", "max: no abstracts", "seema"), ~mutate(.x, screener = .y)) %>%
+  map(~select(.x, screener, rec_num)) %>%
+  invoke(rbind, .)  %>%
+  group_by(screener) %>%
+  summarize(include = sum(rec_num), exclude = sum(1 - rec_num)) %>%
+  mutate(total = include + exclude,
+         pct_retained = round(100 * include / (include + exclude), 1)) %>%
+  mutate(abstracts = if_else(!grepl("abstracts", screener), "No", "Yes"))
+
+table2 = table1 %>%
+  group_by(abstracts) %>%
+  summarize(include = sum(include), exclude = sum(exclude), total = include + exclude) %>%
+  mutate(pct_retained = include / total) %>%
+  mutate(screener = "all")
+
+table3 = summarize(table1, include = sum(include), exclude = sum(exclude), total = sum(total),
+                   pct_retained = round(100 * include / total, 1),
+                   screener = "all", abstracts = "Both")
+
+write_csv(bind_rows(table1, table2, table3), "Screening/Final/final-rec.csv")
+
+# data on no abstracts
+all[[4]] %>%
+  summarize(gpt_include = sum(to_review), gpt_exclude = sum(1-to_review),
+            total = gpt_include + gpt_exclude,
+            final_include = sum(rec_num),
+            final_exclude = sum(1-rec_num)) %>%
+  write_csv("Screening/Final/no-abstract-summary.csv")
+
+#
+pdb = readxl::read_excel("Archive/Article Databases/Prescribing DB.xlsx") %>%
+  filter(`Cross-sectional vs Longitudinal?` == "LONGITUDINAL") %>%
+  select(ID, Authors, `Publication Year`, Title, Journal)
+
+full = readxl::read_excel("Article Database/KS-4350 Optic search results final set.csv")
+
+
+# --------------------------------------------
+subs.match = pdb %>%
+  mutate(Title = tolower(gsub("[[:punct:]]", "", Title))) %>%
+  select(Title) %>%
+  left_join(final %>%
+              mutate(Title = tolower(gsub("[[:punct:]]", "", Title)))) %>%
+  select(Title, Abstract) %>%
+  distinct(Title, .keep_all = TRUE) %>%
+  mutate(found = if_else(is.na(Abstract), 0, 1)) %>%
+  filter(found == 1)
+
+full.match = pdb %>%
+  mutate(Title = tolower(gsub("[[:punct:]]", "", Title))) %>%
+  select(Title) %>%
+  left_join(full %>%
+              mutate(Title = tolower(gsub("[[:punct:]]", "", Title)))) %>%
+  select(Title, Abstract) %>%
+  distinct(Title, .keep_all = TRUE) %>%
+  mutate(found = if_else(is.na(Abstract), 0, 1)) %>%
+  filter(found == 1)
+
+# Find the ones that didn't match via fuzzy matching
+full.match0 = pdb %>%
+  mutate(Title = tolower(gsub("[[:punct:]]", "", Title))) %>%
+  select(Title, Authors, Year = `Publication Year`, Journal) %>%
+  left_join(full %>%
+              mutate(Title = tolower(gsub("[[:punct:]]", "", Title))) %>%
+              select(Title, Abstract)) %>%
+  #select(Title, Abstract) %>%
+  mutate(found = if_else(is.na(Abstract), 0, 1)) %>%
+  filter(found == 0) %>%
+  mutate(Title = tolower(gsub("[[:punct:]]", "", Title)))
+
+all.titles = tolower(gsub("[[:punct:]]", "", full$Title))
+
+test = map(full.match0$Title, ~agrep(.x, all.titles, ignore.case = TRUE, max.distance = 2))
+
+indices = map(test, unlist) %>% map(returnNA) %>% map(~.x[1]) %>% unlist()
+
+remaining = tibble(
+  Title = full.match0$Title,
+  Title.match = full$Title[indices],
+  Author = full.match0$Authors,
+  Journal = full.match0$Journal,
+  Year = full.match0$Year
+) %>%
+  filter(is.na(Title.match)) %>%
+  select(-Title.match)
+
+write_csv(remaining, "remaining.csv")
+
+found = tibble(
+  old = full.match0$Title,
+  Title = full$Title[indices],
+  Abstract = full$Abstract[indices]
+) %>%
+  filter(!is.na(Title)) %>%
+  select(-old)
+
+write_csv(remaining, "cantfind.csv")
+
+# add to in our final list
+subs.add = found %>%
+  select(Title) %>%
+  distinct() %>%
+  left_join(final %>%
+              distinct(Title, .keep_all = TRUE) %>%
+              select(Title, Abstract)) %>%
+  filter(!is.na(Abstract)) %>%
+  mutate(Title = tolower(gsub("[[:punct:]]", "", Title)))
+
+full.add = found %>%
+  select(Title) %>%
+  distinct() %>%
+  left_join(final %>%
+              distinct(Title, .keep_all = TRUE) %>%
+              select(Title, Abstract)) %>%
+  filter(is.na(Abstract)) %>%
+  select(-Abstract) %>%
+  left_join(found) %>%
+  mutate(Title = tolower(gsub("[[:punct:]]", "", Title)))
+
+full.match.final = bind_rows(full.match, full.add %>% mutate(found = 1))
+subs.match.final = bind_rows(subs.match, subs.add %>% mutate(found = 1))
+
+# suspect these were screened by ChatGPT
+not.included = anti_join(full.match, subs.match)
+
+reviewed = all %>%
+  map(~select(.x, Abstracts = abstracts)) %>%
+  invoke(rbind, .)
+
+wrong.screened = not.included %>%
+  filter(
+    not.included$Abstract %in% reviewed$Abstracts
+  )
+
+wrong.gpt = not.included %>%
+  filter(
+    !not.included$Abstract %in% reviewed$Abstracts
+  )
+
+wrong.gpt$Abstract
+
+nrow(not.included)-nrow(wrong.screened)
+
+map(all, ~filter(.x, abstracts %in% wrong.screened$Abstract)) %>%
+  map(~select(.x, abstracts)$abstracts) %>%
+  unlist()
+
+
+#################################
+
+# 114 articles that used longitudinal data in our original review
+
+# At least 80 were in our new library
+  # Trying to find the remaining 22 articles that we cannot match
+
+# Among the 114 articles in OG literature review:
+  # MM (<= 22) were not in our library of 45k articles;
+  # XX (>= 12) were screened by ChatGPT
+  # YY (>= 4) were included by ChatGPT; incorrectly screened by us
+  # 74 were included in our final screening

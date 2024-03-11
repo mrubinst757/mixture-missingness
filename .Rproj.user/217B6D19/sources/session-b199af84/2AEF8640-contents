@@ -1,0 +1,57 @@
+setwd("C:\\Users\\mrubinstein\\OneDrive - RAND Corporation\\Documents\\Opioids\\LitReview\\Screening")
+
+all_files = map(list.files(pattern = "csv"), read_csv)
+
+all_files[[1]] <- all_files[[1]] %>%
+  filter(GPT_Rec == 1 | (Insufficient_info == 1 & Further_Review  == 1)) %>%
+  rename(rec = Further_Review) %>%
+  mutate(abstracts = NA) %>%
+  set_names(tolower(names(.))) %>%
+  select(-gpt_rec, -max_rec)
+
+final = all_files %>%
+  map(~select(.x, abstracts, title, keywords, contains("rec"),
+              matches("INCLUDE"))) %>%
+  map(~set_names(.x, c("abstracts", "title", "keywords", "rec"))) %>%
+  invoke(rbind, .) 
+
+write_csv(final, "final/final-02-25-24.csv")
+
+
+qt(0.975, 49)
+prop.test()
+?prop.test
+
+fastR::wilson.ci(12,30)
+install.packages("DescTools", repos = "cran.r-project.org")
+library(DescTools)
+BinomCI(0, 50, sides = "two.sided", method = "wilson")
+BinomCI(1, 50, sides = "two.sided", method = "wilson")
+BinomCI(1, 150, sides = "two.sided", method = "wilson")
+BinomCI(1, 100, sides = "two.sided", method = "wilson")
+
+BinomCI(2, 250, sides = "two.sided", method = "wilson")
+
+get_wilson_ci <- function(x, alpha = 0.05) {
+  #-----------------------------------------------------------------------------
+  # Compute the Wilson (aka Score) confidence interval for a popn. proportion
+  #-----------------------------------------------------------------------------
+  # x        vector of data (zeros and ones)
+  # alpha    1 - (confidence level)
+  #-----------------------------------------------------------------------------
+  n <- length(x)
+  p_hat <- mean(x)
+  SE_hat_sq <- p_hat * (1 - p_hat) / n
+  crit <- qnorm(1 - alpha / 2)
+  
+  omega <- n / (n + crit^2)
+  
+  A <- p_hat + crit^2 / (2 * n)
+  
+  B <- crit * sqrt(SE_hat_sq + crit^2 / (4 * n^2))
+  
+  CI <- c('lower' = omega * (A - B), 
+          'upper' = omega * (A + B))
+  return(CI)
+}
+get_wilson_ci(c(1, rep(0, 99)))

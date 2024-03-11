@@ -1,0 +1,24 @@
+# generate benes
+ids0 = sample(c(1:1e6), size = 1000)
+ids1 = c(sample(ids0, size = 800), sample(c(1:1e6), size = 200))
+ids2 = c(sample(ids1, size = 800), sample(c(1:1e6), size = 200))
+
+# generate bene characteristics Z_i, X_{it}
+Z = rnorm(1e6, 0, 1)
+X = MASS::mvrnorm(n = 1e6, mu = c(0, 0, 0, 0), Sigma = matrix(c(1, 0.2, 0.2, 0.2, 
+                                                                0.2, 1, 0.2, 0.2, 
+                                                                0.2, 0.2, 1, 0.2, 
+                                                                0.2, 0.2, 0.2, 1), 4, 4))
+
+# generate plan characteristics W_j
+W = rnorm(100, 0, 1)
+P = 
+
+
+
+# generate outcomes
+Y = MASS::mvrnorm(n = 1e6, mu = c(0, 0, 0, 0), Sigma = matrix(c(1, 0.2, 0.2, 0.2, 
+                                                                0.2, 1, 0.2, 0.2, 
+                                                                0.2, 0.2, 1, 0.2, 
+                                                                0.2, 0.2, 0.2, 1), 4, 4))
+
