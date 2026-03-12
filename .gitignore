@@ -1,2 +1,8 @@
 sim-inputs/
 plots/
+paper/
+.Rproj.user
+.RData
+.Rhistory
+new-paper.tex
+variance-based-summary.md
