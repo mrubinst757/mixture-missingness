@@ -185,16 +185,6 @@ c(ate_lb_pos, ate_ub_pos)
 - τ > 1: Censored individuals have higher outcome risk (positive selection)
 - τ < 1: Censored individuals have lower outcome risk (negative selection)
 
-## Citation
-
-This code generates the simulations and analysis for the accompanying research paper. If you use this code, please cite:
-
-[Citation information to be added upon publication]
-
-## License
-
-[License information to be added]
-
 ## Contact
 
-For questions or issues, please open an issue on this repository.
+For questions or issues, please write to mdrubinstein@gmail.com. Thanks!
